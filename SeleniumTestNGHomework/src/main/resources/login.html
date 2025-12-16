@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login Page</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    .box { max-width: 360px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+    label { display: block; margin-top: 12px; }
+    input { width: 100%; padding: 8px; margin-top: 4px; }
+    button { margin-top: 16px; padding: 10px 14px; cursor: pointer; }
+    #error { color: #b00020; margin-top: 12px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Login</h2>
+
+    <label for="username">Username</label>
+    <input id="username" type="text" placeholder="admin"/>
+
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="password"/>
+
+    <button id="loginBtn" type="button">Login</button>
+
+    <div id="error">Invalid username or password</div>
+  </div>
+
+  <script>
+    (function(){
+      const correctUser = "admin";
+      const correctPass = "password";
+
+      const btn = document.getElementById("loginBtn");
+      btn.addEventListener("click", function(){
+        const u = document.getElementById("username").value;
+        const p = document.getElementById("password").value;
+
+        if(u === correctUser && p === correctPass){
+          window.location.href = "success.html";
+        } else {
+          document.getElementById("error").style.display = "block";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

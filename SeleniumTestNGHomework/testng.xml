@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suite name="SeleniumTestNGHomework Suite">
+  <test name="All HW4 Tests">
+    <packages>
+      <package name="com.example.hw4.task1"/>
+      <package name="com.example.hw4.task2"/>
+      <package name="com.example.hw4.task3"/>
+    </packages>
+  </test>
+</suite>

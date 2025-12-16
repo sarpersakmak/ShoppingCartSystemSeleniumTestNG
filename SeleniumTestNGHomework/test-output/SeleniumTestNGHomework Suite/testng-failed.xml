@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Failed suite [SeleniumTestNGHomework Suite]">
+  <test thread-count="5" name="All HW4 Tests(failed)">
+    <classes>
+      <class name="com.example.hw4.task2.LoginTest">
+        <methods>
+          <include name="loginShouldFailWithWrongCredentials" invocation-numbers="1"/>
+          <include name="loginShouldSucceedWithCorrectCredentials" invocation-numbers="1"/>
+        </methods>
+      </class> <!-- com.example.hw4.task2.LoginTest -->
+      <class name="com.example.hw4.task3.FactoryBrowserTitleTest">
+        <methods>
+          <include name="shouldOpenExampleDotComAndVerifyTitle"/>
+        </methods>
+      </class> <!-- com.example.hw4.task3.FactoryBrowserTitleTest -->
+    </classes>
+  </test> <!-- All HW4 Tests(failed) -->
+</suite> <!-- Failed suite [SeleniumTestNGHomework Suite] -->
