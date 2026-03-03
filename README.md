@@ -1,4 +1,4 @@
-# Selenium TestNG Homework Project
+# Shopping Cart System Selenium TestNG Project
 
 ## 📋 Project Overview
 
@@ -335,11 +335,7 @@ For issues during presentation:
 
 ## 📄 License
 
-This project is created for educational purposes as part of coursework.
-
----
-
-**Author**: [Your Name]  
-**Course**: Selenium WebDriver and TestNG  
-**Date**: [Submission Date]  
+**Author**: Sarper Sakmak  
+**Course**: Software Validation and Verification  
+**Date**: 12/13/2025  
 **Version**: 1.0
