@@ -5,19 +5,30 @@ import org.testng.TestNG;
 import java.util.Collections;
 
 /**
- * Convenience runner for presentations:
- * - Runs TestNG suite (Tasks 1-3 + previous shopping cart tests)
- * - Then runs the MainProjectRunner (Google+ChatGPT) interactively
+ * Optional presentation runner that executes the TestNG suite first and then,
+ * when {@code -DrunResearch=true} is supplied, starts the research application.
  */
-public class MainRunner {
+public final class MainRunner {
 
-    public static void main(String[] args) throws Exception {
-        System.out.println("=== Running TestNG suite (see console for results) ===");
-        TestNG testng = new TestNG();
-        testng.setTestSuites(Collections.singletonList("testng.xml"));
-        testng.run();
+    private MainRunner() {
+        // Application entry-point class; prevent instantiation.
+    }
 
-        System.out.println("\n=== Running Main Project (Google + ChatGPT) ===");
-        MainProjectRunner.main(args);
+    public static void main(String[] args) {
+        System.out.println("=== Running TestNG suite ===");
+
+        TestNG testNg = new TestNG();
+        testNg.setTestSuites(Collections.singletonList("testng.xml"));
+        testNg.run();
+
+        if (testNg.hasFailure()) {
+            System.err.println("The TestNG suite completed with failures.");
+        }
+
+        boolean runResearch = Boolean.parseBoolean(System.getProperty("runResearch", "false"));
+        if (runResearch) {
+            System.out.println("\n=== Running automated research project ===");
+            MainProjectRunner.main(args);
+        }
     }
 }
