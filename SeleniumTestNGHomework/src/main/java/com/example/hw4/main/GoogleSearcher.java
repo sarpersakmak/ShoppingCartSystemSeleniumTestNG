@@ -1,92 +1,131 @@
 package com.example.hw4.main;
 
 import com.example.hw4.main.model.SearchResult;
-import io.github.bonigarcia.wdm.WebDriverManager;
-import org.openqa.selenium.*;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
+import com.example.hw4.selenium.WebDriverFactory;
+import org.openqa.selenium.By;
+import org.openqa.selenium.Keys;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
- * Uses Selenium to perform a Google search and collect the first N non-ad results.
+ * Performs a Google search with Selenium and collects unique organic results.
  *
- * NOTE: Google can show consent screens or bot detection.
- * This implementation tries to accept consent if present and continues best-effort.
+ * <p>Search pages can display consent dialogs or automation challenges. The
+ * implementation therefore uses best-effort handling and returns the results
+ * that were successfully collected.</p>
  */
-public class GoogleSearcher {
+public final class GoogleSearcher {
+
+    private static final String GOOGLE_URL = "https://www.google.com/ncr";
+    private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(10);
 
     public List<SearchResult> searchTopResults(String keyword, int limit) {
-        WebDriverManager.chromedriver().setup();
+        String normalizedKeyword = requireNonBlank(keyword, "keyword");
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be greater than zero");
+        }
 
-        ChromeOptions opts = new ChromeOptions();
-        opts.addArguments("--disable-blink-features=AutomationControlled");
-        opts.addArguments("--start-maximized");
-        boolean headless = Boolean.parseBoolean(System.getProperty("headless", "false"));
-        if (headless) opts.addArguments("--headless=new");
-
-        WebDriver driver = new ChromeDriver(opts);
-        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(3));
-        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
-
+        WebDriver driver = WebDriverFactory.create("chrome");
         try {
-            driver.get("https://www.google.com/ncr");
+            driver.get(GOOGLE_URL);
+            acceptConsentIfPresent(driver);
 
-            acceptConsentIfShown(driver);
+            WebElement searchBox = new WebDriverWait(driver, WAIT_TIMEOUT)
+                    .until(ExpectedConditions.elementToBeClickable(By.name("q")));
+            searchBox.sendKeys(normalizedKeyword);
+            searchBox.sendKeys(Keys.ENTER);
 
-            WebElement q = driver.findElement(By.name("q"));
-            q.sendKeys(keyword);
-            q.sendKeys(Keys.ENTER);
+            new WebDriverWait(driver, WAIT_TIMEOUT)
+                    .until(ExpectedConditions.presenceOfElementLocated(By.id("search")));
 
-            sleep(1500);
-
-            List<SearchResult> results = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
-
-            List<WebElement> links = driver.findElements(By.cssSelector("div#search a:has(h3)"));
-            for (WebElement a : links) {
-                if (results.size() >= limit) break;
-
-                String href = a.getAttribute("href");
-                String title = "";
-                try { title = a.findElement(By.cssSelector("h3")).getText(); } catch (Exception ignored) {}
-
-                if (href == null || href.trim().isEmpty()) continue;
-                if (!href.startsWith("http")) continue;
-                if (href.contains("google.com")) continue;
-                if (href.contains("/aclk?")) continue;
-                if (!seen.add(href)) continue;
-
-                results.add(new SearchResult(title, href));
-            }
-
-            return results;
+            return collectOrganicResults(driver, limit);
         } finally {
             driver.quit();
         }
     }
 
-    private void acceptConsentIfShown(WebDriver driver) {
-        List<By> candidates = Arrays.asList(
-                By.id("L2AGLb"),
-                By.cssSelector("button[aria-label='Accept all']"),
-                By.cssSelector("button:has(div:contains('Accept all'))")
-        );
+    private List<SearchResult> collectOrganicResults(WebDriver driver, int limit) {
+        List<SearchResult> results = new ArrayList<>();
+        Set<String> visitedUrls = new HashSet<>();
 
-        for (By by : candidates) {
-            try {
-                List<WebElement> els = driver.findElements(by);
-                if (!els.isEmpty() && els.get(0).isDisplayed()) {
-                    els.get(0).click();
-                    sleep(800);
-                    return;
-                }
-            } catch (Exception ignored) {}
+        // Selecting all anchors and checking for a nested h3 avoids browser-specific :has() support.
+        List<WebElement> anchors = driver.findElements(By.cssSelector("div#search a"));
+        for (WebElement anchor : anchors) {
+            if (results.size() >= limit) {
+                break;
+            }
+
+            SearchResult result = toSearchResult(anchor);
+            if (result == null || !isExternalOrganicUrl(result.getUrl())) {
+                continue;
+            }
+
+            if (visitedUrls.add(result.getUrl())) {
+                results.add(result);
+            }
+        }
+
+        return results;
+    }
+
+    private SearchResult toSearchResult(WebElement anchor) {
+        try {
+            WebElement heading = anchor.findElement(By.tagName("h3"));
+            String url = anchor.getAttribute("href");
+            String title = heading.getText();
+
+            if (url == null || url.trim().isEmpty() || title == null || title.trim().isEmpty()) {
+                return null;
+            }
+            return new SearchResult(title, url);
+        } catch (NoSuchElementException ignored) {
+            return null;
         }
     }
 
-    private void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException ignored) {}
+    private boolean isExternalOrganicUrl(String url) {
+        String normalized = url.toLowerCase(Locale.ROOT);
+        return normalized.startsWith("http")
+                && !normalized.contains("google.com")
+                && !normalized.contains("/aclk?");
+    }
+
+    private void acceptConsentIfPresent(WebDriver driver) {
+        List<By> consentButtons = Arrays.asList(
+                By.id("L2AGLb"),
+                By.cssSelector("button[aria-label='Accept all']"),
+                By.xpath("//button[.//*[contains(normalize-space(), 'Accept all')]]"),
+                By.xpath("//button[contains(normalize-space(), 'Accept all')]")
+        );
+
+        for (By locator : consentButtons) {
+            try {
+                List<WebElement> matches = driver.findElements(locator);
+                if (!matches.isEmpty() && matches.get(0).isDisplayed()) {
+                    matches.get(0).click();
+                    return;
+                }
+            } catch (RuntimeException ignored) {
+                // Continue with the next known consent selector.
+            }
+        }
+    }
+
+    private String requireNonBlank(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value.trim();
     }
 }
