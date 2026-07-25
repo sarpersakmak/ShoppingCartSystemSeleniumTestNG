@@ -1,0 +1,85 @@
+package com.example.hw4.selenium;
+
+import io.github.bonigarcia.wdm.WebDriverManager;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
+
+import java.time.Duration;
+import java.util.Locale;
+
+/**
+ * Creates consistently configured Chrome or Firefox WebDriver instances.
+ *
+ * <p>Use {@code -Dheadless=true} to run browsers without opening a window.
+ * Driver binaries are resolved by WebDriverManager.</p>
+ */
+public final class WebDriverFactory {
+
+    private static final Duration PAGE_LOAD_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration SCRIPT_TIMEOUT = Duration.ofSeconds(30);
+
+    private WebDriverFactory() {
+        // Utility class; prevent instantiation.
+    }
+
+    public static WebDriver create(String browserName) {
+        String normalizedBrowser = normalizeBrowserName(browserName);
+        boolean headless = Boolean.parseBoolean(System.getProperty("headless", "false"));
+
+        WebDriver driver;
+        switch (normalizedBrowser) {
+            case "chrome":
+                driver = createChromeDriver(headless);
+                break;
+            case "firefox":
+                driver = createFirefoxDriver(headless);
+                break;
+            default:
+                throw new IllegalArgumentException(
+                        "Unsupported browser '" + browserName + "'. Supported values: chrome, firefox."
+                );
+        }
+
+        // Explicit waits are used by the tests, so implicit waiting stays disabled.
+        driver.manage().timeouts().implicitlyWait(Duration.ZERO);
+        driver.manage().timeouts().pageLoadTimeout(PAGE_LOAD_TIMEOUT);
+        driver.manage().timeouts().scriptTimeout(SCRIPT_TIMEOUT);
+        return driver;
+    }
+
+    private static WebDriver createChromeDriver(boolean headless) {
+        WebDriverManager.chromedriver().setup();
+
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--disable-blink-features=AutomationControlled");
+        options.addArguments("--window-size=1440,1000");
+        if (headless) {
+            options.addArguments("--headless=new");
+        }
+
+        return new ChromeDriver(options);
+    }
+
+    private static WebDriver createFirefoxDriver(boolean headless) {
+        WebDriverManager.firefoxdriver().setup();
+
+        FirefoxOptions options = new FirefoxOptions();
+        options.addArguments("--width=1440");
+        options.addArguments("--height=1000");
+        if (headless) {
+            options.addArguments("-headless");
+        }
+
+        return new FirefoxDriver(options);
+    }
+
+    private static String normalizeBrowserName(String browserName) {
+        if (browserName == null || browserName.trim().isEmpty()) {
+            return "chrome";
+        }
+        return browserName.trim().toLowerCase(Locale.ROOT);
+    }
+}
