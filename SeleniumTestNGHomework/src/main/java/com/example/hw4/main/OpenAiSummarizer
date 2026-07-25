@@ -1,0 +1,208 @@
+package com.example.hw4.main;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+import java.io.IOException;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Generates short summaries through the OpenAI Chat Completions HTTP endpoint.
+ *
+ * <p>The API key is supplied by the caller and is never stored in the project.
+ * This class intentionally uses OkHttp directly so the project does not depend
+ * on a vendor-specific Java SDK.</p>
+ */
+public final class OpenAiSummarizer {
+
+    private static final String API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final MediaType JSON_MEDIA_TYPE =
+            MediaType.parse("application/json; charset=utf-8");
+
+    private static final int SOURCE_TEXT_LIMIT = 6_000;
+    private static final int COMBINED_SUMMARY_LIMIT = 8_000;
+
+    private final OkHttpClient client;
+    private final String apiKey;
+    private final String model;
+
+    public OpenAiSummarizer(String apiKey, String model) {
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.model = requireNonBlank(model, "model");
+        this.client = new OkHttpClient.Builder()
+                .callTimeout(60, TimeUnit.SECONDS)
+                .build();
+    }
+
+    public boolean isConfigured() {
+        return !apiKey.isEmpty() && !"YOUR_OPENAI_API_KEY".equals(apiKey);
+    }
+
+    public String summarize(String url, String extractedText) throws IOException {
+        String prompt = "Summarize the following web page in 150-200 words. "
+                + "Use clear academic English, focus on the main ideas, and avoid filler.\n\n"
+                + "URL: " + requireNonBlank(url, "url") + "\n\n"
+                + "CONTENT:\n" + clip(extractedText, SOURCE_TEXT_LIMIT);
+
+        return requestCompletion(prompt);
+    }
+
+    public String comparativeSummary(String keyword, String combinedSummaries) throws IOException {
+        String prompt = "Keyword: " + requireNonBlank(keyword, "keyword") + "\n\n"
+                + "Using the summaries below, write a 120-180 word comparative conclusion that covers:\n"
+                + "- common themes\n"
+                + "- important differences\n"
+                + "- the overall takeaway\n\n"
+                + "SUMMARIES:\n" + clip(combinedSummaries, COMBINED_SUMMARY_LIMIT);
+
+        return requestCompletion(prompt);
+    }
+
+    private String requestCompletion(String prompt) throws IOException {
+        if (!isConfigured()) {
+            return "[OpenAI API key is not configured. Set OPENAI_API_KEY or -DopenaiKey.]";
+        }
+
+        String requestJson = "{"
+                + "\"model\":\"" + escapeJson(model) + "\","
+                + "\"temperature\":0.2,"
+                + "\"messages\":["
+                + "{\"role\":\"system\",\"content\":\""
+                + "You produce concise summaries in clear academic English.\"},"
+                + "{\"role\":\"user\",\"content\":\"" + escapeJson(prompt) + "\"}"
+                + "]"
+                + "}";
+
+        Request request = new Request.Builder()
+                .url(API_URL)
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .post(RequestBody.create(requestJson, JSON_MEDIA_TYPE))
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            String responseBody = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) {
+                throw new IOException("OpenAI request failed with HTTP "
+                        + response.code() + ": " + clip(responseBody, 500));
+            }
+
+            String content = extractFirstJsonStringValue(responseBody, "content");
+            if (content == null || content.trim().isEmpty()) {
+                throw new IOException("OpenAI response did not contain assistant content.");
+            }
+            return content.trim();
+        }
+    }
+
+    /**
+     * Extracts the first JSON string value for the requested key.
+     * This small parser handles escaped characters without adding another dependency.
+     */
+    static String extractFirstJsonStringValue(String json, String key) {
+        if (json == null || key == null) {
+            return null;
+        }
+
+        String keyToken = "\"" + key + "\"";
+        int keyIndex = json.indexOf(keyToken);
+        while (keyIndex >= 0) {
+            int colonIndex = json.indexOf(':', keyIndex + keyToken.length());
+            if (colonIndex < 0) {
+                return null;
+            }
+
+            int valueStart = skipWhitespace(json, colonIndex + 1);
+            if (valueStart < json.length() && json.charAt(valueStart) == '"') {
+                return parseJsonString(json, valueStart + 1);
+            }
+
+            keyIndex = json.indexOf(keyToken, keyIndex + keyToken.length());
+        }
+        return null;
+    }
+
+    private static String parseJsonString(String json, int startIndex) {
+        StringBuilder value = new StringBuilder();
+        boolean escaped = false;
+
+        for (int index = startIndex; index < json.length(); index++) {
+            char current = json.charAt(index);
+
+            if (escaped) {
+                switch (current) {
+                    case '"': value.append('"'); break;
+                    case '\\': value.append('\\'); break;
+                    case '/': value.append('/'); break;
+                    case 'b': value.append('\b'); break;
+                    case 'f': value.append('\f'); break;
+                    case 'n': value.append('\n'); break;
+                    case 'r': value.append('\r'); break;
+                    case 't': value.append('\t'); break;
+                    case 'u':
+                        if (index + 4 >= json.length()) {
+                            return null;
+                        }
+                        String hex = json.substring(index + 1, index + 5);
+                        try {
+                            value.append((char) Integer.parseInt(hex, 16));
+                        } catch (NumberFormatException exception) {
+                            return null;
+                        }
+                        index += 4;
+                        break;
+                    default:
+                        value.append(current);
+                }
+                escaped = false;
+            } else if (current == '\\') {
+                escaped = true;
+            } else if (current == '"') {
+                return value.toString();
+            } else {
+                value.append(current);
+            }
+        }
+
+        return null;
+    }
+
+    private static int skipWhitespace(String text, int startIndex) {
+        int index = startIndex;
+        while (index < text.length() && Character.isWhitespace(text.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
+
+    private static String clip(String text, int maxCharacters) {
+        String normalized = text == null ? "" : text.trim();
+        return normalized.length() <= maxCharacters
+                ? normalized
+                : normalized.substring(0, maxCharacters);
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
+    private static String requireNonBlank(String value, String fieldName) {
+        Objects.requireNonNull(value, fieldName + " must not be null");
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return normalized;
+    }
+}
