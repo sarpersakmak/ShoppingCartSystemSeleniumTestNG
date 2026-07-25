@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<suite name="SeleniumTestNGHomework Suite">
-  <test name="All HW4 Tests">
-    <packages>
-      <package name="com.example.hw4.task1"/>
-      <package name="com.example.hw4.task2"/>
-      <package name="com.example.hw4.task3"/>
-    </packages>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Selenium TestNG Homework Suite" verbose="1">
+  <test name="Homework and Unit Tests">
+    <classes>
+      <class name="com.example.hw4.main.HtmlContentParserTest"/>
+      <class name="com.example.hw4.main.OpenAiSummarizerTest"/>
+      <class name="com.example.hw4.task1.PriceComparatorTest"/>
+      <class name="com.example.hw4.task2.LoginTest"/>
+      <class name="com.example.hw4.task3.FactoryTest"/>
+    </classes>
   </test>
 </suite>
