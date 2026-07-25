@@ -5,12 +5,18 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Duration;
 
 /**
- * Fetches static HTML content using OkHttp (requests equivalent in Java).
+ * Downloads static HTML content through an HTTP GET request.
  */
-public class WebContentFetcher {
+public final class WebContentFetcher {
+
+    private static final String USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
     private final OkHttpClient client;
 
@@ -23,18 +29,33 @@ public class WebContentFetcher {
     }
 
     public String fetchHtml(String url) throws IOException {
-        Request req = new Request.Builder()
+        validateHttpUrl(url);
+
+        Request request = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "text/html,application/xhtml+xml")
                 .header("Accept-Language", "en-US,en;q=0.9")
                 .build();
 
-        try (Response res = client.newCall(req).execute()) {
-            if (!res.isSuccessful()) {
-                throw new IOException("HTTP " + res.code() + " for " + url);
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code() + " for " + url);
             }
-            if (res.body() == null) return "";
-            return res.body().string();
+            return response.body() == null ? "" : response.body().string();
+        }
+    }
+
+    private void validateHttpUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String scheme = uri.getScheme();
+            if (scheme == null
+                    || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+                throw new IllegalArgumentException("Only HTTP and HTTPS URLs are supported: " + url);
+            }
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("Invalid URL: " + url, exception);
         }
     }
 }
