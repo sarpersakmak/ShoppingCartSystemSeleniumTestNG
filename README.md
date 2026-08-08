@@ -418,6 +418,4 @@ Check that the destination is writable and that the report path ends with `.pdf`
 - Use structured API response models through a JSON library.
 - Add richer PDF formatting and source metadata.
 
-## License
 
-No license has been selected for this repository. Add a license file before distributing or reusing the project publicly.
